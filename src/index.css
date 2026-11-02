@@ -1,0 +1,15 @@
+@import "tailwindcss";
+@source "./";
+
+:root {
+  font-family: "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif;
+  color: #0f172a;
+  background: #f8faf9;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color-scheme: light;
+}
+body { margin: 0; min-width: 320px; }
+::selection { background: #cde9d7; }

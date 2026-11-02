@@ -8,7 +8,7 @@ import test from 'node:test'
 const require = createRequire(process.env.ENERGY_PLAYWRIGHT_ROOT
   ? path.join(process.env.ENERGY_PLAYWRIGHT_ROOT, 'package.json') : import.meta.url)
 const { chromium } = require('playwright')
-const baseURL = process.env.ENERGY_TEST_URL ?? 'http://127.0.0.1:5175/'
+const baseURL = process.env.ENERGY_TEST_URL ?? 'http://127.0.0.1:5175/energy-saving-advisor/'
 
 const forbidden = /技術依據與注意事項|SRC-\d{3}|PDF|印刷第|支持程度|審核狀態|核對日期|資料來源|規則匹配分數|規則版本|壓縮空氣供氣系統節能手冊|商業冷凍冷藏.*Q&A/
 

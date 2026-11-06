@@ -25,25 +25,54 @@ function App() {
   const [selectedPlace, setSelectedPlace] = useState<PlaceType | null>(null)
   const [answers, setAnswers] = useState<Answers>({})
   const [questionIndex, setQuestionIndex] = useState(0)
+  // 答案仍只由 answers 管理；僅備份正在修改的一題，供取消時還原。
+  const [editing, setEditing] = useState<{ id: keyof Answers; original: Answers[keyof Answers] } | null>(null)
+  const summaryReturnRef = useRef<{ id: keyof Answers; scrollY: number } | null>(null)
   const questions = getQuestionsForPlace(selectedPlace ?? 'office')
   const mainRef = useRef<HTMLElement>(null)
-  const initialRender = useRef(true)
+  const headingRef = useRef<HTMLHeadingElement>(null)
+  const questionRef = useRef<HTMLLegendElement>(null)
+  const editButtonRefs = useRef<Partial<Record<keyof Answers, HTMLButtonElement | null>>>({})
+  const previousFocusKey = useRef<string | null>(null)
+  const stageTitles = { home: '中小微能源用戶互動式節能改善指南', location: '選擇營業場所類型', summary: '用電狀況回答摘要', recommendations: '節能改善措施推薦' }
+  const pageTitle = page === 'questions'
+    ? `${editing ? '正在修改' : ''}第 ${questionIndex + 1} 題：${questions[questionIndex].title}`
+    : stageTitles[page]
+  const focusKey = page === 'questions' ? `${page}:${questionIndex}:${editing ? 'edit' : 'answer'}` : page
 
   useEffect(() => {
-    if (initialRender.current) {
-      initialRender.current = false
+    document.title = page === 'home' ? pageTitle : `${pageTitle}｜節能改善指南`
+    // 只有階段／題目切換才聚焦；初載及 StrictMode 重跑不重複移動焦點。
+    if (previousFocusKey.current === focusKey) return
+    const initial = previousFocusKey.current === null
+    previousFocusKey.current = focusKey
+    if (initial) return
+    if (page === 'summary' && summaryReturnRef.current) {
+      const { id, scrollY } = summaryReturnRef.current
+      editButtonRefs.current[id]?.focus({ preventScroll: true })
+      window.scrollTo({ top: scrollY, behavior: 'instant' })
+      summaryReturnRef.current = null
       return
     }
-    mainRef.current?.focus({ preventScroll: true })
+    const target = page === 'questions' ? questionRef.current : headingRef.current
+    target?.focus({ preventScroll: true })
     window.scrollTo({ top: 0, behavior: 'instant' })
-  }, [page])
+  }, [page, pageTitle, focusKey])
+
+  function finishEditing(save: boolean, destination: 'summary' | 'home' = 'summary') {
+    if (!editing) return
+    if (!save) setAnswers((current) => ({ ...current, [editing.id]: editing.original }))
+    if (destination !== 'summary') summaryReturnRef.current = null
+    setEditing(null)
+    setPage(destination)
+  }
 
   return (
     <div className="flex min-h-svh flex-col">
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:z-10 focus:bg-white focus:p-4">跳至主要內容</a>
       <header className="border-b border-slate-200/80 bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-5 sm:px-10">
-          <a href="./" onClick={(event) => { event.preventDefault(); setPage('home') }} aria-label="節能改善指南首頁" className="flex items-center gap-3 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-emerald-700">
+          <a href="./" onClick={(event) => { event.preventDefault(); if (editing) finishEditing(false, 'home'); else setPage('home') }} aria-label="節能改善指南首頁" className="flex items-center gap-3 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-emerald-700">
             <span className="rounded-xl bg-emerald-800 p-2 text-white"><Leaf className="size-7" /></span>
             <span className="text-lg font-bold tracking-wide text-emerald-950">節能改善指南</span>
           </a>
@@ -55,7 +84,7 @@ function App() {
         <section className="mx-auto grid max-w-6xl items-center gap-12 px-6 py-14 sm:px-10 sm:py-20 lg:grid-cols-[1.3fr_1fr] lg:gap-16 lg:py-24" aria-labelledby="hero-title">
           <div>
             <p className="mb-6 flex items-center gap-2 text-sm font-semibold tracking-wider text-emerald-800"><span className="size-2 rounded-full bg-emerald-600" />從日常用電開始，讓節能更有方向</p>
-            <h1 id="hero-title" className="max-w-xl text-4xl leading-[1.4] font-bold tracking-tight text-slate-900 sm:text-5xl sm:leading-[1.35]">中小微能源用戶<br className="hidden sm:block" /><span className="text-emerald-800">互動式節能改善指南</span></h1>
+            <h1 id="hero-title" ref={headingRef} tabIndex={-1} className="max-w-xl rounded-lg text-4xl leading-[1.4] font-bold tracking-tight text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-emerald-700 sm:text-5xl sm:leading-[1.35]">中小微能源用戶<br className="hidden sm:block" /><span className="text-emerald-800">互動式節能改善指南</span></h1>
             <p className="mt-6 max-w-lg text-base leading-8 text-slate-600 sm:text-lg">節能，從了解自己的用電開始。<br />陪你盤點營業場所的用電情形，找到適合的改善方向，讓每一度電都用得更好。</p>
             <button type="button" onClick={() => setPage('location')} aria-describedby="assessment-status" className="mt-8 inline-flex min-h-13 cursor-pointer items-center gap-8 rounded-xl bg-emerald-800 px-6 py-4 font-semibold text-white transition-colors hover:bg-emerald-900 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-emerald-700">
               開始節能評估 <span aria-hidden="true">→</span>
@@ -95,24 +124,31 @@ function App() {
           </div>
         </section>
         </> : page === 'location' || !selectedPlace ? <Assessment
+          headingRef={headingRef}
           selectedPlace={selectedPlace}
           onSelect={setSelectedPlace}
           onBack={() => setPage('home')}
           onNext={() => { if (selectedPlace) { setQuestionIndex(0); setPage('questions') } }}
-        /> : page === 'recommendations' ? <Recommendations place={selectedPlace} answers={answers} onBack={() => setPage('summary')} /> : <Questionnaire
+        /> : page === 'recommendations' ? <Recommendations headingRef={headingRef} place={selectedPlace} answers={answers} onBack={() => setPage('summary')} /> : <Questionnaire
+          headingRef={headingRef}
+          questionRef={questionRef}
+          editButtonRefs={editButtonRefs}
           questions={questions}
           index={questionIndex}
           answers={answers}
           place={selectedPlace}
           summary={page === 'summary'}
+          editing={editing !== null}
           onChange={setAnswers}
           onBack={() => {
-            if (page === 'summary') { setQuestionIndex(questions.length - 1); setPage('questions') }
+            if (editing) finishEditing(false)
+            else if (page === 'summary') { setQuestionIndex(questions.length - 1); setPage('questions') }
             else if (questionIndex === 0) setPage('location')
             else setQuestionIndex(questionIndex - 1)
           }}
           onNext={() => {
             if (!isAnswered(questions[questionIndex], answers)) return
+            if (editing) { finishEditing(true); return }
             if (questionIndex < questions.length - 1) setQuestionIndex(questionIndex + 1)
             else {
               const unanswered = questions.findIndex((question) => !isAnswered(question, answers))
@@ -120,7 +156,14 @@ function App() {
               else setQuestionIndex(unanswered)
             }
           }}
-          onEdit={(index) => { setQuestionIndex(index); setPage('questions') }}
+          onEdit={(index) => {
+            const id = questions[index].id
+            const original = answers[id]
+            setEditing({ id, original: Array.isArray(original) ? [...original] : original })
+            summaryReturnRef.current = { id, scrollY: window.scrollY }
+            setQuestionIndex(index)
+            setPage('questions')
+          }}
           onEditPlace={() => setPage('location')}
           onRecommend={() => { if (questions.every((question) => isAnswered(question, answers))) setPage('recommendations') }}
         />}

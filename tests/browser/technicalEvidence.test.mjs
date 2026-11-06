@@ -47,12 +47,50 @@ for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 
       const results = page.locator('main > section > ol > li')
       assert.equal(await results.count(), 13)
 
+      const resultNames = await results.locator('h3').allTextContents()
+      const editAnswers = page.getByRole('button', { name: '修改回答', exact: true })
+      const bottomBack = page.getByRole('button', { name: '返回回答摘要／修改答案', exact: true })
+      assert.equal(await editAnswers.count(), 1)
+      assert.equal(await bottomBack.count(), 1)
+      const editBounds = await editAnswers.boundingBox()
+      const titleBounds = await page.getByRole('heading', { name: '節能改善措施推薦', exact: true }).boundingBox()
+      assert.ok(editBounds && titleBounds)
+      assert.ok(editBounds.height >= 48)
+      assert.ok(editBounds.x >= 0 && editBounds.x + editBounds.width <= viewport.width)
+      assert.ok(editBounds.y >= 0 && editBounds.y + editBounds.height <= viewport.height)
+      if (viewport.width < 640) assert.ok(editBounds.y >= titleBounds.y + titleBounds.height)
+      else assert.ok(editBounds.x >= titleBounds.x + titleBounds.width)
+
+      // 由結果頁 main 的既有焦點按 Tab，應直接到標題區的新入口。
+      await page.keyboard.press('Tab')
+      assert.equal(await editAnswers.evaluate((button) => button === document.activeElement), true)
+      assert.equal(await editAnswers.evaluate((button) => button.matches(':focus-visible')), true)
+      assert.equal(await editAnswers.evaluate((button) => getComputedStyle(button).outlineStyle), 'solid')
+      assert.ok(await editAnswers.evaluate((button) => parseFloat(getComputedStyle(button).outlineWidth) >= 2))
+      if (process.env.ENERGY_BROWSER_ARTIFACTS) {
+        await mkdir(process.env.ENERGY_BROWSER_ARTIFACTS, { recursive: true })
+        await page.screenshot({ path: path.join(process.env.ENERGY_BROWSER_ARTIFACTS, `edit-answers-${viewport.width}.png`) })
+      }
+      for (const action of ['enter', 'click', 'bottom-space']) {
+        if (action === 'enter') await page.keyboard.press('Enter')
+        else if (action === 'click') await editAnswers.click()
+        else await bottomBack.press('Space')
+        assert.ok(await page.getByRole('heading', { name: '用電狀況回答摘要', exact: true }).isVisible())
+        assert.deepEqual(await page.locator('main dl dd > span').allTextContents(), [
+          '小型工廠', '3001～10000元', '空調、照明、冷凍冷藏、空壓', '超過12小時', '超過10年', '設備耗電量高',
+        ])
+        await page.getByRole('button', { name: '查看節能改善建議' }).click()
+        assert.deepEqual(await results.locator('h3').allTextContents(), resultNames)
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth), false)
+      }
+
       assert.doesNotMatch(await page.locator('main').textContent(), forbidden)
-      assert.equal(await page.locator('main details').count(), 0)
+      assert.equal(await page.locator('main details').count(), 13)
+      assert.equal(await page.locator('main details[open]').count(), 0)
       assert.equal(await page.locator('a[href$=".pdf"]').count(), 0)
       assert.ok(await page.getByText(/以下為初步改善建議/).isVisible())
       for (const item of await results.all()) {
-        assert.ok(await item.getByRole('heading', { name: '為什麼推薦給你', exact: true }).isVisible())
+        assert.ok(await item.locator('summary').isVisible())
         assert.ok(await item.getByRole('heading', { name: '具體建議', exact: true }).isVisible())
         assert.ok(await item.getByText('改善難易度', { exact: true }).isVisible())
         assert.ok(await item.getByText('設備投資需求', { exact: true }).isVisible())
@@ -77,10 +115,9 @@ for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 
       assert.ok(await page.getByText('空調、照明、冷凍冷藏、空壓', { exact: true }).isVisible())
       await page.getByRole('button', { name: '修改主要用電設備', exact: true }).click()
       for (const option of ['空調', '照明', '冷凍冷藏', '空壓']) await page.getByLabel(option, { exact: true }).uncheck()
-      assert.ok(await page.getByRole('button', { name: '下一步', exact: true }).isDisabled())
+      assert.ok(await page.getByRole('button', { name: '儲存修改並返回摘要', exact: true }).isDisabled())
       await page.getByLabel('其他', { exact: true }).check()
-      for (let i = 0; i < 3; i++) await page.getByRole('button', { name: '下一步', exact: true }).click()
-      await page.getByRole('button', { name: '查看回答摘要', exact: true }).click()
+      await page.getByRole('button', { name: '儲存修改並返回摘要', exact: true }).click()
       await page.getByRole('button', { name: '查看節能改善建議' }).click()
       assert.equal(await page.locator('main > section > ol > li').count(), 1)
       assert.ok(await page.getByRole('heading', { name: '建立電費與設備用電紀錄', exact: true }).isVisible())
